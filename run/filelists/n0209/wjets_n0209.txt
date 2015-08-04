@@ -1,0 +1,6 @@
+/gdata/atlas/ucintprod/SusyNt/n0209/mc15_n0209/user.dantrim.mc15_13TeV.361100.PowhegPythia8EvtGen_AZNLOCTEQ6L1_Wplusenu.SusyNt.e3601_s2576_s2132_r6630_r6264_p2375_n0209/
+/gdata/atlas/ucintprod/SusyNt/n0209/mc15_n0209/user.dantrim.mc15_13TeV.361101.PowhegPythia8EvtGen_AZNLOCTEQ6L1_Wplusmunu.SusyNt.e3601_s2576_s2132_r6630_r6264_p2375_n0209/
+/gdata/atlas/ucintprod/SusyNt/n0209/mc15_n0209/user.dantrim.mc15_13TeV.361102.PowhegPythia8EvtGen_AZNLOCTEQ6L1_Wplustaunu.SusyNt.e3601_s2576_s2132_r6630_r6264_p2375_n0209/
+/gdata/atlas/ucintprod/SusyNt/n0209/mc15_n0209/user.dantrim.mc15_13TeV.361103.PowhegPythia8EvtGen_AZNLOCTEQ6L1_Wminusenu.SusyNt.e3601_s2576_s2132_r6630_r6264_p2375_n0209/
+/gdata/atlas/ucintprod/SusyNt/n0209/mc15_n0209/user.dantrim.mc15_13TeV.361104.PowhegPythia8EvtGen_AZNLOCTEQ6L1_Wminusmunu.SusyNt.e3601_s2576_s2132_r6630_r6264_p2375_n0209/
+/gdata/atlas/ucintprod/SusyNt/n0209/mc15_n0209/user.dantrim.mc15_13TeV.361105.PowhegPythia8EvtGen_AZNLOCTEQ6L1_Wminustaunu.SusyNt.e3601_s2576_s2132_r6630_r6264_p2375_n0209/

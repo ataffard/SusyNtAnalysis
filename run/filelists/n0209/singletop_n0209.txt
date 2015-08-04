@@ -1,0 +1,6 @@
+/gdata/atlas/ucintprod/SusyNt/n0209/mc15_n0209/user.dantrim.mc15_13TeV.410011.PowhegPythiaEvtGen_P2012_singletop_tchan_lept_top.SusyNt.p2375_n0209/
+/gdata/atlas/ucintprod/SusyNt/n0209/mc15_n0209/user.dantrim.mc15_13TeV.410012.PowhegPythiaEvtGen_P2012_singletop_tchan_lept_antitop.SusyNt.p2375_n0209/
+/gdata/atlas/ucintprod/SusyNt/n0209/mc15_n0209/user.dantrim.mc15_13TeV.410015.PowhegPythiaEvtGen_P2012_Wt_dilepton_top.SusyNt.e3753_s2608_s2183_r6630_r6264_p2375_n0209/
+/gdata/atlas/ucintprod/SusyNt/n0209/mc15_n0209/user.dantrim.mc15_13TeV.410016.PowhegPythiaEvtGen_P2012_Wt_dilepton_antitop.SusyNt.e3753_s2608_s2183_r6630_r6264_p2375_n0209/
+/gdata/atlas/ucintprod/SusyNt/n0209/mc15_n0209/user.dantrim.mc15_13TeV.410025.PowhegPythiaEvtGen_P2012_SingleTopSchan_noAllHad_top.SusyNt.p2375_n0209/
+/gdata/atlas/ucintprod/SusyNt/n0209/mc15_n0209/user.dantrim.mc15_13TeV.410026.PowhegPythiaEvtGen_P2012_SingleTopSchan_noAllHad_antitop.SusyNt.p2375_n0209/
