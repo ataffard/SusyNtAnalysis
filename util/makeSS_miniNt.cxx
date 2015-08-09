@@ -66,7 +66,8 @@ int main(int argc, char* argv[])
     ////////////////////////////////////////////////////////////////////////
     Superflow* cutflow = new Superflow(); // initialize the cutflow
     cutflow->setAnaName("SS_miniNt");
-    cutflow->setAnaType(AnalysisType::Ana_2Lep); 
+    cutflow->setAnaType(AnalysisType::Ana_SS3L); 
+    cutflow->setSelectTaus(false);
     cutflow->setSampleName(sample);
     cutflow->setRunMode(run_mode);
     cutflow->setCountWeights(true); // print the weighted cutflows
@@ -128,10 +129,14 @@ int main(int argc, char* argv[])
     //  Analysis Cuts
     ////////////////////////////////////////////////////////////
     
-    *cutflow << CutName("tau veto") << [](Superlink* sl) -> bool {
-        return sl->taus->size() == 0;
+    //*cutflow << CutName("tau veto") << [](Superlink* sl) -> bool {
+    //        return sl->taus->size() == 0;
+    //    };
+    *cutflow << CutName("at least 2 base lepton") << [](Superlink* sl) -> bool {
+        return sl->baseLeptons->size() >= 1;
     };
-    *cutflow << CutName("at least 1 signal lepton") << [](Superlink* sl) -> bool {
+
+    *cutflow << CutName("at least 2 signal lepton") << [](Superlink* sl) -> bool {
         return sl->leptons->size() >= 1;
     };
     
@@ -185,6 +190,19 @@ int main(int argc, char* argv[])
         *cutflow << SaveVar();
     }
     
+    //
+    // Triggers
+    //
+    
+/*
+  ee HLT_2e12_loose_L12EM10VH HLT_2e12_lhloose_L12EM10VH
+  mm HLT_mu18_mu8noL1
+  em HLT_e17_loose_mu14 HLT_e17_lhloose_mu14
+  Met HLT_xe100
+  
+*/
+
+
     //
     // Leptons
     //
@@ -431,17 +449,163 @@ int main(int argc, char* argv[])
     //
     // Jets
     //
+    JetVector sjets; //signal jets
+    JetVector bjets;
     
+    *cutflow << [&](Superlink* sl, var_void*) {
+        JetVector susyJets = *sl->jets;
+        for(int i = 0; i < susyJets.size(); i++) {
+            Jet* j = susyJets.at(i);
+            sjets.push_back(j); 
+            if(sl->tools->m_jetSelector.isCentralBJet(sjets.at(i))) { bjets.push_back(j); }
+        }
+    };
+
     
+    //Signal Jets
+    *cutflow << NewVar("number of sjets"); {
+        *cutflow << HFTname("nSJets");
+        *cutflow << [&](Superlink* sl, var_int*) -> int {
+            return sjets.size();
+        };
+        *cutflow << SaveVar();
+    }
+    *cutflow << NewVar("sjet pt"); {
+        *cutflow << HFTname("sj_pt");
+        *cutflow << [&](Superlink* sl, var_float_array*) -> vector<double> {
+            vector<double> out;
+            for(int i = 0; i < sjets.size(); i++) {
+                out.push_back(sjets.at(i)->Pt());
+            }
+            return out;
+            };
+        *cutflow << SaveVar();
+    }
+    *cutflow << NewVar("sjet eta"); {
+        *cutflow << HFTname("sj_eta");
+        *cutflow << [&](Superlink* sl, var_float_array*) -> vector<double> {
+            vector<double> out;
+            for(int i = 0; i < sjets.size(); i++) {
+                out.push_back(sjets.at(i)->Eta());
+            }
+            return out;
+            };
+        *cutflow << SaveVar();
+    }
+    *cutflow << NewVar("sjet phi"); {
+        *cutflow << HFTname("sj_phi");
+        *cutflow << [&](Superlink* sl, var_float_array*) -> vector<double> {
+            vector<double> out;
+            for(int i = 0; i < sjets.size(); i++) {
+                out.push_back(sjets.at(i)->Phi());
+            }
+            return out;
+            };
+        *cutflow << SaveVar();
+    }
+    *cutflow << NewVar("sjet mv2c20"); {
+        *cutflow << HFTname("sj_mv2c20");
+        *cutflow << [&](Superlink* sl, var_float_array*) -> vector<double> {
+            vector<double> out;
+            for(int i = 0; i < sjets.size(); i++) {
+                out.push_back(sjets.at(i)->mv2c20);
+            }
+            return out;
+            };
+        *cutflow << SaveVar();
+    }
+    *cutflow << NewVar("sjet isBJet"); {
+        *cutflow << HFTname("sj_isBJet");
+        *cutflow << [&](Superlink* sl, var_bool_array*) -> vector<bool> {
+            vector<bool> out;
+            for(int i = 0; i < sjets.size(); i++) {
+                if(sl->tools->m_jetSelector.isCentralBJet(sjets.at(i))) { out.push_back(true); }
+                else { out.push_back(false); }
+            }
+            return out;
+            };
+        *cutflow << SaveVar();
+    }
+
+    //b-jets
+    *cutflow << NewVar("number of bjets"); {
+        *cutflow << HFTname("nBJets");
+        *cutflow << [&](Superlink* sl, var_int*) -> int {
+            return bjets.size();
+        };
+        *cutflow << SaveVar();
+    }
+    *cutflow << NewVar("bjet pt"); {
+        *cutflow << HFTname("bj_pt");
+        *cutflow << [&](Superlink* sl, var_float_array*) -> vector<double> {
+            vector<double> out;
+            for(int i = 0; i < bjets.size(); i++) {
+                out.push_back(bjets.at(i)->Pt());
+            }
+            return out;
+            };
+        *cutflow << SaveVar();
+    }
+    *cutflow << NewVar("bjet eta"); {
+        *cutflow << HFTname("bj_eta");
+        *cutflow << [&](Superlink* sl, var_float_array*) -> vector<double> {
+            vector<double> out;
+            for(int i = 0; i < bjets.size(); i++) {
+                out.push_back(bjets.at(i)->Eta());
+            }
+            return out;
+            };
+        *cutflow << SaveVar();
+    }
+    *cutflow << NewVar("bjet phi"); {
+        *cutflow << HFTname("bj_phi");
+        *cutflow << [&](Superlink* sl, var_float_array*) -> vector<double> {
+            vector<double> out;
+            for(int i = 0; i < bjets.size(); i++) {
+                out.push_back(bjets.at(i)->Phi());
+            }
+            return out;
+            };
+        *cutflow << SaveVar();
+    }
+
+    //
+    // Met
+    //
+    Met met;
     
+    *cutflow << [&](Superlink* sl, var_void*) { met = *sl->met; };
+        *cutflow << NewVar("transverse missing energy (Etmiss)"); {
+        *cutflow << HFTname("met");
+        *cutflow << [&](Superlink* sl, var_float*) -> double { return met.lv().Pt(); };
+        *cutflow << SaveVar();
+    }
+
+    *cutflow << NewVar("phi coord. of Etmiss"); {
+        *cutflow << HFTname("metPhi");
+        *cutflow << [&](Superlink* sl, var_float*) -> double { return met.lv().Phi(); };
+        *cutflow << SaveVar();
+    }
+
+    *cutflow << NewVar("sumet"); {
+        *cutflow << HFTname("sumet");
+        *cutflow << [&](Superlink* sl, var_float*) -> double {
+            return met.sumet;
+        };
+        *cutflow << SaveVar();
+    }
+
+
+
+
     
     *cutflow << [&](Superlink* sl, var_void*) { baseLeptons.clear(); };
     *cutflow << [&](Superlink* sl, var_void*) { baseElectrons.clear(); };
     *cutflow << [&](Superlink* sl, var_void*) { baseMuons.clear(); };
-//    *cutflow << [&](Superlink* sl, var_void*) { jets.clear(); }; 
-//    *cutflow << [&](Superlink* sl, var_void*) { bjets.clear(); };
-//    *cutflow << [&](Superlink* sl, var_void*) { sjets.clear(); };
-//    *cutflow << [&](Superlink* sl, var_void*) { met.clear(); };
+    //*cutflow << [&](Superlink* sl, var_void*) { jets.clear(); }; 
+    *cutflow << [&](Superlink* sl, var_void*) { bjets.clear(); };
+    *cutflow << [&](Superlink* sl, var_void*) { sjets.clear(); };
+    *cutflow << [&](Superlink* sl, var_void*) { met.clear(); };
 
     
     
