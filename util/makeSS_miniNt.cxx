@@ -265,6 +265,34 @@ int main(int argc, char* argv[])
         *cutflow <<[&](Superlink* sl, var_int*) -> int {return storedMuons.size(); };
         *cutflow << SaveVar();
     }
+    *cutflow << NewVar("has 2 leptons pT>20"); {
+        *cutflow << HFTname("nLepPt20");
+        *cutflow <<[&](Superlink* sl, var_bool*) -> int {return sl->tools->hasNLeptonsPtThreshold(*sl->leptons, 2, 20.); };
+        *cutflow << SaveVar();
+    }
+    
+    *cutflow << NewVar("has SS "); {
+        *cutflow << HFTname("hasSS");
+        *cutflow <<[&](Superlink* sl, var_bool*) -> int {return SSLeptons.size()>0; };
+        *cutflow << SaveVar();
+    }
+
+    *cutflow << NewVar("SS lepton flavor (0: ee, 1:em/me, 2: mm, 3 unknown)"); {
+        *cutflow << HFTname("ss_flav");
+        *cutflow <<[&](Superlink* sl, var_int*) -> int {
+            int type=3;
+            if(SSLeptons.size()>1){
+                DiLepEvtType dil_type = getDiLepEvtType(SSLeptons);
+                if(dil_type == ET_ee ) type=0;
+                if(dil_type == ET_me || dil_type == ET_em) type=1;
+                if(dil_type == ET_mm ) type=2;
+            }
+            return type;
+        };
+        *cutflow << SaveVar();
+    }
+
+
     *cutflow << NewVar("lepton flavor (0: e, 1: m)"); {
         *cutflow << HFTname("l_flav");
         *cutflow << [&](Superlink* sl, var_float_array*) -> vector<double> {
