@@ -37,10 +37,12 @@ using namespace sflow;
 // Functions
 void usage(std::string progName="makeSS_miniNt");
 void exec_options(int argc, char* argv[], TChain* chain, int& num_events, string& sample, 
-                  SuperflowRunMode& run_mode, SusyNtSys& nt_sysnt);
+                  SuperflowRunMode& run_mode, bool& fake_mode, SusyNtSys& nt_sysnt);
 
 
-
+//========================================//
+// Fixe fake_mode - ain't working w/ -b
+//========================================//
 
 ///////////////////////////////////////////////////////////////////////
 // Main function
@@ -52,6 +54,7 @@ int main(int argc, char* argv[])
     string sample;
     
     SuperflowRunMode run_mode = SuperflowRunMode::nominal;
+    bool fake_mode = false;
     SusyNtSys nt_sys = NtSys::NOM; 
     TChain* chain = new TChain("susyNt");
     chain->SetDirectory(0);
@@ -59,7 +62,7 @@ int main(int argc, char* argv[])
     ////////////////////////////////////////////////////////////////////////
     // Read command-line options to excecutable
     ////////////////////////////////////////////////////////////////////////
-    exec_options(argc, argv, chain, n_events, sample, run_mode, nt_sys); 
+    exec_options(argc, argv, chain, n_events, sample, run_mode, fake_mode, nt_sys); 
     
     ////////////////////////////////////////////////////////////////////////
     // Initialize and configure the analysis
@@ -139,7 +142,12 @@ int main(int argc, char* argv[])
     *cutflow << CutName("at least 2 signal lepton") << [](Superlink* sl) -> bool {
         return sl->leptons->size() >= 1;
     };
-    
+    /*
+    *cutflow << CutName("at least 2 signal lepton pt>20") << [](Superlink* sl) -> bool {
+        return sl->tools->hasNLeptonsPtThreshold(*sl->leptons, 2, 20.);
+    };
+    */
+
     ////////////////////////////////////////////////////////////
     //  Output Ntuple Setup
     //      > Ntuple variables
@@ -202,38 +210,67 @@ int main(int argc, char* argv[])
   
 */
 
+    Trigger* trigtool = new Trigger(chain, true);
+    TBits triggerBits;
+    *cutflow << NewVar("pass trigger 2e12_loose"); {
+        *cutflow << HFTname("trig_2e12_loose");
+        *cutflow << [&](Superlink* sl, var_bool*) -> bool { return trigtool->passTrigger(triggerBits, "HLT_2e12_loose_L12EM10VH");};
+        *cutflow << SaveVar();
+    }
+
+
 
     //
     // Leptons
     //
-    LeptonVector baseLeptons;
+    LeptonVector   baseLeptons;
     ElectronVector baseElectrons;
-    MuonVector baseMuons;
-    *cutflow << [&](Superlink* sl, var_void*) { baseLeptons = *sl->baseLeptons; };
-    *cutflow << [&](Superlink* sl, var_void*) { baseElectrons = *sl->baseElectrons; };
-    *cutflow << [&](Superlink* sl, var_void*) { baseMuons = *sl->baseMuons; };
-    
-    *cutflow << NewVar("number of base leptons"); {
+    MuonVector     baseMuons;
+    LeptonVector   signalLeptons;
+    ElectronVector signalElectrons;
+    MuonVector     signalMuons;
+
+    //baseline or signal depending on running mode - default is signal
+    LeptonVector   storedLeptons; 
+    ElectronVector storedElectrons;
+    MuonVector     storedMuons;
+
+    LeptonVector   SSLeptons;//highest leading pT SS pair of stored leptons
+
+    *cutflow << [&](Superlink* sl, var_void*) { baseLeptons     = *sl->baseLeptons; };
+    *cutflow << [&](Superlink* sl, var_void*) { baseElectrons   = *sl->baseElectrons; };
+    *cutflow << [&](Superlink* sl, var_void*) { baseMuons       = *sl->baseMuons; };
+    *cutflow << [&](Superlink* sl, var_void*) { signalLeptons   = *sl->leptons; };
+    *cutflow << [&](Superlink* sl, var_void*) { signalElectrons = *sl->electrons; };
+    *cutflow << [&](Superlink* sl, var_void*) { signalMuons     = *sl->muons; };
+
+    *cutflow << [&](Superlink* sl, var_void*) { storedLeptons   = fake_mode ? baseLeptons : signalLeptons; };
+    *cutflow << [&](Superlink* sl, var_void*) { storedElectrons = fake_mode ? baseElectrons : signalElectrons; };
+    *cutflow << [&](Superlink* sl, var_void*) { storedMuons     = fake_mode ? baseMuons : signalMuons; };
+
+    *cutflow << [&](Superlink* sl, var_void*) { SSLeptons = sl->tools->getSSLeptonPair(storedLeptons); };
+
+    *cutflow << NewVar("number of stored leptons"); {
         *cutflow << HFTname("nLep");
-        *cutflow << [&](Superlink* sl, var_int*) -> int { return baseLeptons.size(); };
+        *cutflow << [&](Superlink* sl, var_int*) -> int { return storedLeptons.size(); };
         *cutflow << SaveVar();
     }
-    *cutflow << NewVar("number of base Electrons"); {
+    *cutflow << NewVar("number of stored Electrons"); {
         *cutflow << HFTname("nEle");
-        *cutflow << [&](Superlink* sl, var_int*) -> int {return baseElectrons.size(); };
+        *cutflow << [&](Superlink* sl, var_int*) -> int {return storedElectrons.size(); };
         *cutflow << SaveVar();
     }
-    *cutflow << NewVar("number of base Muons"); {
+    *cutflow << NewVar("number of stored Muons"); {
         *cutflow << HFTname("nMuo");
-        *cutflow <<[&](Superlink* sl, var_int*) -> int {return baseMuons.size(); };
+        *cutflow <<[&](Superlink* sl, var_int*) -> int {return storedMuons.size(); };
         *cutflow << SaveVar();
     }
     *cutflow << NewVar("lepton flavor (0: e, 1: m)"); {
         *cutflow << HFTname("l_flav");
         *cutflow << [&](Superlink* sl, var_float_array*) -> vector<double> {
             vector<double> lep_flav;
-            for(uint i = 0; i < baseLeptons.size(); i++) {
-                lep_flav.push_back(baseLeptons.at(i)->isEle() ? 0 : 1);
+            for(uint i = 0; i < storedLeptons.size(); i++) {
+                lep_flav.push_back(storedLeptons.at(i)->isEle() ? 0 : 1);
             }
             return lep_flav;
         };
@@ -243,8 +280,8 @@ int main(int argc, char* argv[])
         *cutflow << HFTname("l_pt");
         *cutflow << [&](Superlink* sl, var_float_array*) -> vector<double> {
             vector<double> lep_pt;
-            for(uint i = 0; i< baseLeptons.size(); i++) {
-                lep_pt.push_back(baseLeptons.at(i)->Pt());
+            for(uint i = 0; i< storedLeptons.size(); i++) {
+                lep_pt.push_back(storedLeptons.at(i)->Pt());
             }
             return lep_pt;
         };
@@ -254,8 +291,8 @@ int main(int argc, char* argv[])
         *cutflow << HFTname("l_eta");
         *cutflow << [&](Superlink* sl, var_float_array*) -> vector<double> {
             vector<double> lep_eta;
-            for(uint i = 0; i < baseLeptons.size(); i++) {
-                lep_eta.push_back(baseLeptons.at(i)->Eta());
+            for(uint i = 0; i < storedLeptons.size(); i++) {
+                lep_eta.push_back(storedLeptons.at(i)->Eta());
             }
             return lep_eta;
         };
@@ -265,8 +302,8 @@ int main(int argc, char* argv[])
         *cutflow << HFTname("l_phi");
         *cutflow << [&](Superlink* sl, var_float_array*) -> vector<double> {
             vector<double> lep_phi;
-            for(uint i = 0; i < baseLeptons.size(); i++) {
-                lep_phi.push_back(baseLeptons.at(i)->Phi());
+            for(uint i = 0; i < storedLeptons.size(); i++) {
+                lep_phi.push_back(storedLeptons.at(i)->Phi());
             }
             return lep_phi;
         };
@@ -276,8 +313,8 @@ int main(int argc, char* argv[])
         *cutflow << HFTname("l_d0sig");
         *cutflow << [&](Superlink* sl, var_float_array*) -> vector<double> {
             vector<double> d0sigBSCorr;
-            for(uint i = 0; i < baseLeptons.size(); i++) {
-                d0sigBSCorr.push_back(baseLeptons.at(i)->d0sigBSCorr);
+            for(uint i = 0; i < storedLeptons.size(); i++) {
+                d0sigBSCorr.push_back(storedLeptons.at(i)->d0sigBSCorr);
             }
             return d0sigBSCorr;
         };
@@ -287,8 +324,8 @@ int main(int argc, char* argv[])
         *cutflow << HFTname("l_z0");
         *cutflow << [&](Superlink* sl, var_float_array*) -> vector<double> {
             vector<double> out;
-            for(uint i = 0; i < baseLeptons.size(); i++) {
-                out.push_back(baseLeptons.at(i)->z0);
+            for(uint i = 0; i < storedLeptons.size(); i++) {
+                out.push_back(storedLeptons.at(i)->z0);
             }
             return out;
         };
@@ -298,8 +335,8 @@ int main(int argc, char* argv[])
         *cutflow << HFTname("l_z0sinTheta");
         *cutflow << [&](Superlink* sl, var_float_array*) -> vector<double> {
             vector<double> z0;
-            for(uint i = 0; i < baseLeptons.size(); i++) {
-                z0.push_back(baseLeptons.at(i)->z0SinTheta());
+            for(uint i = 0; i < storedLeptons.size(); i++) {
+                z0.push_back(storedLeptons.at(i)->z0SinTheta());
             }
             return z0;
         };
@@ -309,20 +346,33 @@ int main(int argc, char* argv[])
         *cutflow << HFTname("l_q");
         *cutflow << [&](Superlink* sl, var_float_array*) -> vector<double> {
             vector<double> out;
-            for(uint i = 0; i < baseLeptons.size(); i++) {
-                out.push_back(baseLeptons.at(i)->q);
+            for(uint i = 0; i < storedLeptons.size(); i++) {
+                out.push_back(storedLeptons.at(i)->q);
             }
             return out;
         };
         *cutflow << SaveVar();
     }
     
+    *cutflow << NewVar("lepton is iso gradient loose"); {
+        *cutflow << HFTname("l_isGradientLoose");
+        *cutflow << [&](Superlink* sl, var_bool_array*) -> vector<bool> {
+            vector<bool> out;
+            for(uint i = 0; i < storedLeptons.size(); i++) {
+                if(storedLeptons.at(i)->isEle()) out.push_back(((Electron*) storedLeptons.at(i))->isoGradientLoose);
+                else                           out.push_back(((Muon*) storedLeptons.at(i))->isoGradientLoose);
+            }
+            return out;
+        };
+        *cutflow << SaveVar();
+    }
+
     *cutflow << NewVar("lepton ptvarcone20"); {
         *cutflow << HFTname("l_ptvarcone20");
         *cutflow << [&](Superlink* sl, var_float_array*) -> vector<double> {
             vector<double> out;
-            for(uint i = 0; i < baseLeptons.size(); i++) {
-                out.push_back(baseLeptons.at(i)->ptvarcone20);
+            for(uint i = 0; i < storedLeptons.size(); i++) {
+                out.push_back(storedLeptons.at(i)->ptvarcone20);
             }
             return out;
         };
@@ -332,8 +382,8 @@ int main(int argc, char* argv[])
         *cutflow << HFTname("l_ptvarcone30");
         *cutflow << [&](Superlink* sl, var_float_array*) -> vector<double> {
             vector<double> out;
-            for(uint i = 0; i < baseLeptons.size(); i++) {
-                out.push_back(baseLeptons.at(i)->ptvarcone30);
+            for(uint i = 0; i < storedLeptons.size(); i++) {
+                out.push_back(storedLeptons.at(i)->ptvarcone30);
             }
             return out;
         };
@@ -343,8 +393,8 @@ int main(int argc, char* argv[])
         *cutflow << HFTname("l_etconetopo20");
         *cutflow << [&](Superlink* sl, var_float_array*) -> vector<double> {
             vector<double> out;
-            for(uint i = 0; i < baseLeptons.size(); i++) {
-                out.push_back(baseLeptons.at(i)->etconetopo20);
+            for(uint i = 0; i < storedLeptons.size(); i++) {
+                out.push_back(storedLeptons.at(i)->etconetopo20);
             }
             return out;
         };
@@ -354,8 +404,8 @@ int main(int argc, char* argv[])
         *cutflow << HFTname("l_etconetopo30");
         *cutflow << [&](Superlink* sl, var_float_array*) -> vector<double> {
             vector<double> out;
-            for(uint i = 0; i < baseLeptons.size(); i++) {
-                out.push_back(baseLeptons.at(i)->etconetopo30);
+            for(uint i = 0; i < storedLeptons.size(); i++) {
+                out.push_back(storedLeptons.at(i)->etconetopo30);
             }
             return out;
         };
@@ -366,8 +416,8 @@ int main(int argc, char* argv[])
         *cutflow << HFTname("l_STsignal");
         *cutflow << [&](Superlink* sl, var_bool_array*) -> vector<bool> {
             vector<bool> out;
-            for(uint i = 0; i < baseLeptons.size(); i++) {
-                out.push_back(baseLeptons.at(i)->isSignal);
+            for(uint i = 0; i < storedLeptons.size(); i++) {
+                out.push_back(storedLeptons.at(i)->isSignal);
             }
             return out;
         };
@@ -377,9 +427,9 @@ int main(int argc, char* argv[])
         *cutflow << HFTname("l_isLoose");
         *cutflow << [&](Superlink* sl, var_bool_array*) -> vector<bool> {
             vector<bool> out;
-            for(uint i = 0; i < baseLeptons.size(); i++) {
-                if(baseLeptons.at(i)->isEle()) out.push_back(((Electron*) baseLeptons.at(i))->looseLH);
-                else                       out.push_back(((Muon*) baseLeptons.at(i))->loose);
+            for(uint i = 0; i < storedLeptons.size(); i++) {
+                if(storedLeptons.at(i)->isEle()) out.push_back(((Electron*) storedLeptons.at(i))->looseLH);
+                else                       out.push_back(((Muon*) storedLeptons.at(i))->loose);
             }
             return out;
         };
@@ -389,9 +439,9 @@ int main(int argc, char* argv[])
         *cutflow << HFTname("l_isMedium");
         *cutflow << [&](Superlink* sl, var_bool_array*) -> vector<bool> {
             vector<bool> out;
-            for(uint i = 0; i < baseLeptons.size(); i++) {
-                if(baseLeptons.at(i)->isEle()) out.push_back(((Electron*) baseLeptons.at(i))->mediumLH);
-                else                       out.push_back(((Muon*) baseLeptons.at(i))->medium);
+            for(uint i = 0; i < storedLeptons.size(); i++) {
+                if(storedLeptons.at(i)->isEle()) out.push_back(((Electron*) storedLeptons.at(i))->mediumLH);
+                else                       out.push_back(((Muon*) storedLeptons.at(i))->medium);
             }
             return out;
         };
@@ -401,9 +451,9 @@ int main(int argc, char* argv[])
         *cutflow << HFTname("l_isTight");
         *cutflow << [&](Superlink* sl, var_bool_array*) -> vector<bool> {
             vector<bool> out;
-            for(uint i = 0; i < baseLeptons.size(); i++) {
-                if(baseLeptons.at(i)->isEle()) out.push_back(((Electron*) baseLeptons.at(i))->tightLH);
-                else                       out.push_back(((Muon*) baseLeptons.at(i))->tight);
+            for(uint i = 0; i < storedLeptons.size(); i++) {
+                if(storedLeptons.at(i)->isEle()) out.push_back(((Electron*) storedLeptons.at(i))->tightLH);
+                else                       out.push_back(((Muon*) storedLeptons.at(i))->tight);
             }
             return out;
         };
@@ -413,8 +463,8 @@ int main(int argc, char* argv[])
         *cutflow << HFTname("l_isLoose_noD0");
         *cutflow << [&](Superlink* sl, var_bool_array*) -> vector<bool> {
             vector<bool> out;
-            for(uint i = 0; i < baseLeptons.size(); i++) {
-                if(baseLeptons.at(i)->isEle()) out.push_back(((Electron*) baseLeptons.at(i))->looseLH_nod0);
+            for(uint i = 0; i < storedLeptons.size(); i++) {
+                if(storedLeptons.at(i)->isEle()) out.push_back(((Electron*) storedLeptons.at(i))->looseLH_nod0);
                 else                       out.push_back(false);
             }
             return out;
@@ -425,8 +475,8 @@ int main(int argc, char* argv[])
         *cutflow << HFTname("l_isMedium_noD0");
         *cutflow << [&](Superlink* sl, var_bool_array*) -> vector<bool> {
             vector<bool> out;
-            for(uint i = 0; i < baseLeptons.size(); i++) {
-                if(baseLeptons.at(i)->isEle()) out.push_back(((Electron*) baseLeptons.at(i))->mediumLH_nod0);
+            for(uint i = 0; i < storedLeptons.size(); i++) {
+                if(storedLeptons.at(i)->isEle()) out.push_back(((Electron*) storedLeptons.at(i))->mediumLH_nod0);
                 else                       out.push_back(false);
             }
             return out;
@@ -437,8 +487,8 @@ int main(int argc, char* argv[])
         *cutflow << HFTname("l_isTight_noD0");
         *cutflow << [&](Superlink* sl, var_bool_array*) -> vector<bool> {
             vector<bool> out;
-            for(uint i = 0; i < baseLeptons.size(); i++) {
-                if(baseLeptons.at(i)->isEle()) out.push_back(((Electron*) baseLeptons.at(i))->tightLH_nod0);
+            for(uint i = 0; i < storedLeptons.size(); i++) {
+                if(storedLeptons.at(i)->isEle()) out.push_back(((Electron*) storedLeptons.at(i))->tightLH_nod0);
                 else                       out.push_back(false);
             }
             return out;
@@ -478,7 +528,7 @@ int main(int argc, char* argv[])
                 out.push_back(sjets.at(i)->Pt());
             }
             return out;
-            };
+        };
         *cutflow << SaveVar();
     }
     *cutflow << NewVar("sjet eta"); {
@@ -489,7 +539,7 @@ int main(int argc, char* argv[])
                 out.push_back(sjets.at(i)->Eta());
             }
             return out;
-            };
+        };
         *cutflow << SaveVar();
     }
     *cutflow << NewVar("sjet phi"); {
@@ -500,7 +550,18 @@ int main(int argc, char* argv[])
                 out.push_back(sjets.at(i)->Phi());
             }
             return out;
-            };
+        };
+        *cutflow << SaveVar();
+    }
+    *cutflow << NewVar("sjet jvt"); {
+        *cutflow << HFTname("sj_jvt");
+        *cutflow << [&](Superlink* sl, var_float_array*) -> vector<double> {
+            vector<double> out;
+            for(int i = 0; i < sjets.size(); i++) {
+                out.push_back(sjets.at(i)->jvt);
+            }
+            return out;
+        };
         *cutflow << SaveVar();
     }
     *cutflow << NewVar("sjet mv2c20"); {
@@ -511,7 +572,7 @@ int main(int argc, char* argv[])
                 out.push_back(sjets.at(i)->mv2c20);
             }
             return out;
-            };
+        };
         *cutflow << SaveVar();
     }
     *cutflow << NewVar("sjet isBJet"); {
@@ -523,7 +584,7 @@ int main(int argc, char* argv[])
                 else { out.push_back(false); }
             }
             return out;
-            };
+        };
         *cutflow << SaveVar();
     }
 
@@ -543,7 +604,7 @@ int main(int argc, char* argv[])
                 out.push_back(bjets.at(i)->Pt());
             }
             return out;
-            };
+        };
         *cutflow << SaveVar();
     }
     *cutflow << NewVar("bjet eta"); {
@@ -554,7 +615,7 @@ int main(int argc, char* argv[])
                 out.push_back(bjets.at(i)->Eta());
             }
             return out;
-            };
+        };
         *cutflow << SaveVar();
     }
     *cutflow << NewVar("bjet phi"); {
@@ -565,7 +626,7 @@ int main(int argc, char* argv[])
                 out.push_back(bjets.at(i)->Phi());
             }
             return out;
-            };
+        };
         *cutflow << SaveVar();
     }
 
@@ -575,7 +636,7 @@ int main(int argc, char* argv[])
     Met met;
     
     *cutflow << [&](Superlink* sl, var_void*) { met = *sl->met; };
-        *cutflow << NewVar("transverse missing energy (Etmiss)"); {
+    *cutflow << NewVar("transverse missing energy (Etmiss)"); {
         *cutflow << HFTname("met");
         *cutflow << [&](Superlink* sl, var_float*) -> double { return met.lv().Pt(); };
         *cutflow << SaveVar();
@@ -595,16 +656,24 @@ int main(int argc, char* argv[])
         *cutflow << SaveVar();
     }
 
-
-
-
+    
+    //
+    // Cleanup container
+    //
     
     *cutflow << [&](Superlink* sl, var_void*) { baseLeptons.clear(); };
     *cutflow << [&](Superlink* sl, var_void*) { baseElectrons.clear(); };
     *cutflow << [&](Superlink* sl, var_void*) { baseMuons.clear(); };
+    *cutflow << [&](Superlink* sl, var_void*) { signalLeptons.clear(); };
+    *cutflow << [&](Superlink* sl, var_void*) { signalElectrons.clear(); };
+    *cutflow << [&](Superlink* sl, var_void*) { signalMuons.clear(); };
+    *cutflow << [&](Superlink* sl, var_void*) { storedLeptons.clear(); };
+    *cutflow << [&](Superlink* sl, var_void*) { storedElectrons.clear(); };
+    *cutflow << [&](Superlink* sl, var_void*) { storedMuons.clear(); };
+    *cutflow << [&](Superlink* sl, var_void*) { SSLeptons.clear(); };
     //*cutflow << [&](Superlink* sl, var_void*) { jets.clear(); }; 
-    *cutflow << [&](Superlink* sl, var_void*) { bjets.clear(); };
     *cutflow << [&](Superlink* sl, var_void*) { sjets.clear(); };
+    *cutflow << [&](Superlink* sl, var_void*) { bjets.clear(); };
     *cutflow << [&](Superlink* sl, var_void*) { met.clear(); };
 
     
@@ -634,27 +703,28 @@ int main(int argc, char* argv[])
 ///////////////////////////////////////////////////////////////////////
 void usage(std::string progName)
 {
-  printf("=================================================================\n");
-  printf("%s [options]\n",progName.c_str());
-  printf("=================================================================\n");
-  printf("Options:\n");
-  printf("-h        Print this help\n");
-  printf("-n        Number of events to be processed (default: -1)\n");
-  printf("-f        Input file as *.root, list of *.root in a *.txt,\n"); 
-  printf("          or a DIR/ containing *.root (default: none)\n");
-  printf("-c        Nominal weighting\n");
-  printf("-e        Nomianl and single systematic \n");
-  printf("-a        All systemactics\n");
-  printf("-i        Input file list (.root or .txt or /)\n");
-  printf("-s        systematic name \n");
-  printf("=================================================================\n");
+    printf("=================================================================\n");
+    printf("%s [options]\n",progName.c_str());
+    printf("=================================================================\n");
+    printf("Options:\n");
+    printf("-h        Print this help\n");
+    printf("-n        Number of events to be processed (default: -1)\n");
+    printf("-f        Input file as *.root, list of *.root in a *.txt,\n"); 
+    printf("          or a DIR/ containing *.root (default: none)\n");
+    printf("-c        Nominal weighting\n");
+    printf("-e        Nomianl and single systematic \n");
+    printf("-a        All systemactics\n");
+    printf("-b        Do ana with baseline for fake estimate (default:false)\n");
+    printf("-i        Input file list (.root or .txt or /)\n");
+    printf("-s        systematic name \n");
+    printf("=================================================================\n");
 }
 
 ///////////////////////////////////////////////////////////////////////
 // exec_options
 ///////////////////////////////////////////////////////////////////////
 void exec_options(int argc, char* argv[], TChain* chain, int& num_events, string& sample,
-    SuperflowRunMode& run_mode, SusyNtSys& nt_sys)
+                  SuperflowRunMode& run_mode, bool& fake_mode, SusyNtSys& nt_sys)
 {
     bool nominal = false;
     bool nominal_and_weight_syst = false;
@@ -667,7 +737,7 @@ void exec_options(int argc, char* argv[], TChain* chain, int& num_events, string
     /** Read inputs to program */
     opterr = 0;
     int c;
-    while ((c = getopt (argc, argv, "n:c:e:a:i:s:f:h")) != -1)
+    while ((c = getopt (argc, argv, "n:c:e:a:b:i:s:f:h")) != -1)
         switch (c){
         case 'n':
             num_events = atoi(optarg);
@@ -680,6 +750,9 @@ void exec_options(int argc, char* argv[], TChain* chain, int& num_events, string
             break;
         case 'a':
             all_syst = true;
+            break;
+        case 'b':
+            fake_mode = true;
             break;
         case 'i':
             input = string(optarg);
@@ -722,7 +795,7 @@ void exec_options(int argc, char* argv[], TChain* chain, int& num_events, string
         cout << "Analysis    file: " << input << endl;
         sample = input;
     }
-   if (inputIsList) {
+    if (inputIsList) {
         ChainHelper::addFileList(chain, input);
         cout << "Analysis    list: " << input << endl;
         cout << "Analysis    list: " << input << endl;
@@ -766,6 +839,10 @@ void exec_options(int argc, char* argv[], TChain* chain, int& num_events, string
         run_mode = SuperflowRunMode::all_syst;
         cout << "Analysis    run mode: SuperflowRunMode::all_syst" << endl;
     }
+    if (fake_mode) {
+        cout << "Analysis    fake mode TRUE " << endl;
+    }
+    else cout << "Analysis    fake mode FALSE " << endl;
 
     map <string, SusyNtSys> event_syst_map;
 /*    event_syst_map["EESZUP"] = NtSys::EES_Z_UP;

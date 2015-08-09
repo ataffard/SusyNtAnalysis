@@ -13,7 +13,7 @@ PACKAGE              = SusyNtAnalysis
 PACKAGE_PRELOAD      = 
 
 # additional compilation flags to pass (not propagated to dependent packages):
-PACKAGE_CXXFLAGS     = 
+PACKAGE_CXXFLAGS     = -Wunused-parameter -Wno-sign-compare -Wno-parentheses -O3 -ffast-math
 
 # additional compilation flags to pass (propagated to dependent packages):
 PACKAGE_OBJFLAGS     = 
@@ -22,7 +22,7 @@ PACKAGE_OBJFLAGS     =
 PACKAGE_LDFLAGS      = 
 
 # additional linker flags to pass (for compiling binaries):
-PACKAGE_BINFLAGS     = 
+PACKAGE_BINFLAGS     = -lXMLParser -lEG
 
 # additional linker flags to pass (propagated to client libraries):
 PACKAGE_LIBFLAGS     = 
@@ -37,7 +37,7 @@ PACKAGE_TRYDEP       =
 PACKAGE_SCRIPTS      = 
 
 # whether to use pedantic compilation:
-PACKAGE_PEDANTIC     = 1
+PACKAGE_PEDANTIC     = 0
 
 # whether to turn *off* optimization (set to dict to do it only for
 # dictionaries):
